@@ -1,0 +1,136 @@
+[
+  {
+    "name": "Tachiyomi: Raven Scans",
+    "pkg": "eu.kanade.tachiyomi.extension.en.ravenscans",
+    "apk": "tachiyomi-en.ravenscans-v1.4.37.apk",
+    "lang": "en",
+    "code": 37,
+    "version": "1.4.37",
+    "nsfw": 1,
+    "sources": [
+      {
+        "name": "Raven Scans",
+        "lang": "en",
+        "id": "4058612731793916500",
+        "baseUrl": "https://ravenscans.org",
+        "versionId": 37
+      }
+    ]
+  }
+]
+
+# Raven Scans Custom Extension Repository for Tachimanga
+
+A small personal extension repository containing Raven Scans, configured for `https://ravenscans.org`.
+
+## Tachimanga
+
+After the first GitHub Actions build completes and the generated files are committed, add this repository's raw `index.min.json` URL in Tachimanga's extension repository settings.
+
+Example:
+
+`https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/main/index.min.json`
+
+The extension package is built from the current Keiyoushi `extensions-source` tree and the Raven Scans module is patched to use `https://ravenscans.org`.
+
+## Important
+
+This repository does not host or redistribute manga content. It only provides an extension that reads the public Raven Scans website.
+
+{
+  "index_v2": "https://RAW_GITHUB_URL/index.pb",
+  "meta": {
+    "name": "Raven Scans Custom",
+    "website": "https://ravenscans.org"
+  }
+}
+
+name: Build Raven Scans extension
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'patch/**'
+      - '.github/workflows/build.yml'
+      - 'index.min.json'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Checkout Keiyoushi extension source
+        uses: actions/checkout@v4
+        with:
+          repository: keiyoushi/extensions-source
+          path: upstream
+          fetch-depth: 1
+
+      - name: Apply Raven Scans patch
+        run: |
+          cp patch/build.gradle.kts upstream/src/en/ravenscans/build.gradle.kts
+          cp patch/src/eu/kanade/tachiyomi/extension/en/ravenscans/RavenScans.kt \
+            upstream/src/en/ravenscans/src/eu/kanade/tachiyomi/extension/en/ravenscans/RavenScans.kt
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Build Raven Scans
+        working-directory: upstream
+        run: ./gradlew :src:en:ravenscans:assembleRelease --no-daemon
+
+      - name: Copy APK
+        run: |
+          mkdir -p release
+          cp upstream/src/en/ravenscans/build/outputs/apk/release/*.apk \
+            release/tachiyomi-en.ravenscans-v1.4.37.apk
+          cp index.min.json release/index.min.json
+
+      - name: Publish generated files
+        run: |
+          cp release/tachiyomi-en.ravenscans-v1.4.37.apk ./tachiyomi-en.ravenscans-v1.4.37.apk
+          cp release/index.min.json ./index.min.json
+          rm -rf upstream release
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add tachiyomi-en.ravenscans-v1.4.37.apk index.min.json
+          git commit -m 'Build Raven Scans extension [skip ci]' || exit 0
+          git push
+
+import io.github.keiyoushi.gradle.api.ContentWarning
+
+plugins {
+    alias(kei.plugins.extension)
+}
+
+keiyoushi {
+    name = "Raven Scans"
+    versionCode = 37
+    contentWarning = ContentWarning.MIXED
+    libVersion = "1.4"
+    theme = "mangathemesia"
+
+    source {
+        lang = "en"
+        baseUrl = "https://ravenscans.org"
+    }
+}
+
+package eu.kanade.tachiyomi.extension.en.ravenscans
+
+import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import keiyoushi.annotation.Source
+
+@Source
+abstract class RavenScans : MangaThemesia() {
+    override val mangaUrlDirectory = "/series"
+}
