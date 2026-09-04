@@ -1,0 +1,60 @@
+name: Build Raven Scans extension
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'patch/**'
+      - '.github/workflows/build.yml'
+      - 'index.min.json'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Checkout Keiyoushi extension source
+        uses: actions/checkout@v4
+        with:
+          repository: keiyoushi/extensions-source
+          path: upstream
+          fetch-depth: 1
+
+      - name: Apply Raven Scans patch
+        run: |
+          cp patch/build.gradle.kts upstream/src/en/ravenscans/build.gradle.kts
+          cp patch/src/eu/kanade/tachiyomi/extension/en/ravenscans/RavenScans.kt \
+            upstream/src/en/ravenscans/src/eu/kanade/tachiyomi/extension/en/ravenscans/RavenScans.kt
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Build Raven Scans
+        working-directory: upstream
+        run: ./gradlew :src:en:ravenscans:assembleRelease --no-daemon
+
+      - name: Copy APK
+        run: |
+          mkdir -p release
+          cp upstream/src/en/ravenscans/build/outputs/apk/release/*.apk \
+            release/tachiyomi-en.ravenscans-v1.4.37.apk
+          cp index.min.json release/index.min.json
+
+      - name: Publish generated files
+        run: |
+          cp release/tachiyomi-en.ravenscans-v1.4.37.apk ./tachiyomi-en.ravenscans-v1.4.37.apk
+          cp release/index.min.json ./index.min.json
+          rm -rf upstream release
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add tachiyomi-en.ravenscans-v1.4.37.apk index.min.json
+          git commit -m 'Build Raven Scans extension [skip ci]' || exit 0
+          git push
